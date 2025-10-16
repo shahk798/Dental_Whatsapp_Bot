@@ -8,18 +8,15 @@ const clinics = require('./clinics.json');
 const app = express();
 app.use(bodyParser.json());
 
-// ✅ Read WhatsApp phone number ID from .env
+// WhatsApp phone number ID from .env
 const phoneNumberIdEnv = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
-// ✅ Connect MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-})
-.then(() => console.log('✅ MongoDB connected'))
-.catch(err => console.log('❌ MongoDB connection error:', err));
+// Connect MongoDB
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('✅ MongoDB connected'))
+    .catch(err => console.log('❌ MongoDB connection error:', err));
 
-// ✅ Verify webhook
+// Verify webhook
 app.get('/webhook', (req, res) => {
     const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
     const mode = req.query['hub.mode'];
@@ -36,7 +33,7 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// ✅ WhatsApp webhook endpoint
+// WhatsApp webhook endpoint
 app.post('/webhook', async (req, res) => {
     try {
         const entry = req.body.entry;
@@ -50,7 +47,7 @@ app.post('/webhook', async (req, res) => {
                     const text = messages[0].text.body;
                     const phoneNumberIdIncoming = value.metadata.phone_number_id;
 
-                    // ✅ Match incoming phone_number_id with .env
+                    // Match incoming phone_number_id with .env
                     if (phoneNumberIdIncoming === phoneNumberIdEnv) {
                         const clinicConfig = clinics[0]; // only one clinic in JSON
                         await handleMessage(clinicConfig, from, text);
@@ -67,6 +64,6 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-// ✅ Start server
+// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

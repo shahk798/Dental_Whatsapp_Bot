@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 
 const patientSessions = {};
 
+// Services list
 const servicesList = [
     { name: "Dental Cleaning", price: "₹500", emoji: "🦷" },
     { name: "Teeth Whitening", price: "₹1500", emoji: "✨" },
@@ -15,6 +16,7 @@ const servicesList = [
     { name: "Check-Up", price: "₹2000", emoji: "🦷" }
 ];
 
+// FAQs list
 const faqsList = [
     { question: "What services do you offer?", answer: "We offer Dental Cleaning 🦷, Teeth Whitening ✨, Orthodontics 😁, Root Canal 🪥, Dental Implants 🦷💎, Pediatric Dentistry 👶🦷, and Gum Treatment 🩸🦷." },
     { question: "Do you accept insurance?", answer: "✅ Yes, we accept major insurance providers. Please contact the clinic staff for details." },
@@ -23,10 +25,10 @@ const faqsList = [
     { question: "Where is the clinic located?", answer: "📍 123 Smile Street, Dental City, India" }
 ];
 
-// Get dynamic collection per clinic
+// Dynamic MongoDB model per clinic
 const getAppointmentModel = (clinicName) => {
     const collectionName = `appointments_${clinicName.replace(/\s+/g, '_').toLowerCase()}`;
-    if(mongoose.models[collectionName]){
+    if (mongoose.models[collectionName]) {
         return mongoose.models[collectionName];
     }
     const schema = new mongoose.Schema({
@@ -44,21 +46,22 @@ const getAppointmentModel = (clinicName) => {
 
 const handleMessage = async (clinicConfig, fromNumber, incomingMsg) => {
     const msg = incomingMsg.trim();
-    if(!patientSessions[fromNumber]){
+    if (!patientSessions[fromNumber]) {
         patientSessions[fromNumber] = { step: 0, data: {}, faqMode: false };
     }
     const session = patientSessions[fromNumber];
     const clinicContact = clinicConfig.contact;
 
+    // Send main menu
     const sendMainMenu = async (name) => {
         let menu = `👋 Hey ${name}! Welcome to *${clinicConfig.clinic_name}*.\nI am here to assist you. 😊\n\n📋 *Main Menu*:\n`;
         menu += `1️⃣ Services & Prices\n2️⃣ Book Appointment\n3️⃣ Working Hours ⏰\n4️⃣ Clinic Address 📍\n5️⃣ FAQs ❓\n\nPlease reply with the option number or name.`;
         await sendMessage(fromNumber, menu);
-    }
+    };
 
     // Step 0: Greeting
-    if(session.step === 0){
-        if(msg.toLowerCase().includes('hi') || msg.toLowerCase().includes('hello')){
+    if (session.step === 0) {
+        if (msg.toLowerCase().includes('hi') || msg.toLowerCase().includes('hello')) {
             await sendMessage(fromNumber, `👋 Hey! Welcome to *${clinicConfig.clinic_name}*, I am here to assist you. What's your name? 😊`);
             session.step = 1;
         } else {
@@ -68,7 +71,7 @@ const handleMessage = async (clinicConfig, fromNumber, incomingMsg) => {
     }
 
     // Step 1: Get patient name
-    if(session.step === 1){
+    if (session.step === 1) {
         session.data.patient_name = msg;
         await sendMainMenu(session.data.patient_name);
         session.step = 2;
@@ -76,28 +79,28 @@ const handleMessage = async (clinicConfig, fromNumber, incomingMsg) => {
     }
 
     // Step 2: Menu handling
-    if(session.step === 2){
+    if (session.step === 2) {
         const input = msg.toLowerCase();
 
-        if(input.includes('1') || input.includes('services')){
+        if (input.includes('1') || input.includes('services')) {
             let serviceText = "🦷 *Services & Prices*\n";
-            servicesList.forEach((s,i)=>{
-                serviceText += `${s.emoji} ${i+1}. ${s.name} - ${s.price}\n`;
+            servicesList.forEach((s, i) => {
+                serviceText += `${s.emoji} ${i + 1}. ${s.name} - ${s.price}\n`;
             });
             await sendMessage(fromNumber, serviceText);
             await sendMainMenu(session.data.patient_name);
-        } else if(input.includes('2') || input.includes('book')){
+        } else if (input.includes('2') || input.includes('book')) {
             await sendMessage(fromNumber, "📅 Great! Let's book your appointment.\nPlease provide your phone number:");
             session.step = 3;
-        } else if(input.includes('3') || input.includes('hours')){
+        } else if (input.includes('3') || input.includes('hours')) {
             await sendMessage(fromNumber, "⏰ *Working Hours*\nMon-Sat: 9:00 AM - 6:00 PM\nSun: Closed");
             await sendMainMenu(session.data.patient_name);
-        } else if(input.includes('4') || input.includes('address')){
+        } else if (input.includes('4') || input.includes('address')) {
             await sendMessage(fromNumber, "📍 *Clinic Address*\n123 Smile Street, Dental City, India");
             await sendMainMenu(session.data.patient_name);
-        } else if(input.includes('5') || input.includes('faq')){
+        } else if (input.includes('5') || input.includes('faq')) {
             let faqText = "❓ *FAQs*\n";
-            faqsList.forEach((f,i)=>{
+            faqsList.forEach((f, i) => {
                 const numberEmoji = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'][i];
                 faqText += `${numberEmoji} ${f.question}\n`;
             });
@@ -111,13 +114,13 @@ const handleMessage = async (clinicConfig, fromNumber, incomingMsg) => {
     }
 
     // FAQ mode
-    if(session.faqMode){
+    if (session.faqMode) {
         const index = parseInt(msg) - 1;
-        if(index >=0 && index < faqsList.length){
+        if (index >= 0 && index < faqsList.length) {
             await sendMessage(fromNumber, `💡 ${faqsList[index].answer}`);
         } else {
-            const matchedFaq = faqsList.find(f=> msg.toLowerCase().includes(f.question.toLowerCase()));
-            if(matchedFaq){
+            const matchedFaq = faqsList.find(f => msg.toLowerCase().includes(f.question.toLowerCase()));
+            if (matchedFaq) {
                 await sendMessage(fromNumber, `💡 ${matchedFaq.answer}`);
             } else {
                 await sendMessage(fromNumber, `❌ Sorry, I didn’t understand. Please contact our staff at 📞 ${clinicContact}.`);
@@ -129,22 +132,22 @@ const handleMessage = async (clinicConfig, fromNumber, incomingMsg) => {
     }
 
     // Booking steps
-    if(session.step === 3){
+    if (session.step === 3) {
         session.data.phone = msg;
         await sendMessage(fromNumber, "📧 Do you want to provide your email? (Yes/No)");
         session.step = 4;
         return;
     }
 
-    if(session.step === 4){
-        if(msg.toLowerCase() === 'yes'){
+    if (session.step === 4) {
+        if (msg.toLowerCase() === 'yes') {
             await sendMessage(fromNumber, "✉️ Please enter your email:");
             session.step = 5;
         } else {
             session.data.email = "";
             let serviceText = "🦷 Please select a service:\n";
-            servicesList.forEach((s,i)=>{
-                serviceText += `${s.emoji} ${i+1}. ${s.name} - ${s.price}\n`;
+            servicesList.forEach((s, i) => {
+                serviceText += `${s.emoji} ${i + 1}. ${s.name} - ${s.price}\n`;
             });
             await sendMessage(fromNumber, serviceText);
             session.step = 6;
@@ -152,21 +155,21 @@ const handleMessage = async (clinicConfig, fromNumber, incomingMsg) => {
         return;
     }
 
-    if(session.step === 5){
+    if (session.step === 5) {
         session.data.email = msg;
         let serviceText = "🦷 Please select a service:\n";
-        servicesList.forEach((s,i)=>{
-            serviceText += `${s.emoji} ${i+1}. ${s.name} - ${s.price}\n`;
+        servicesList.forEach((s, i) => {
+            serviceText += `${s.emoji} ${i + 1}. ${s.name} - ${s.price}\n`;
         });
         await sendMessage(fromNumber, serviceText);
         session.step = 6;
         return;
     }
 
-    if(session.step === 6){
+    if (session.step === 6) {
         const choice = parseInt(msg);
-        if(choice >=1 && choice <= servicesList.length){
-            session.data.service = servicesList[choice-1].name;
+        if (choice >= 1 && choice <= servicesList.length) {
+            session.data.service = servicesList[choice - 1].name;
         } else {
             session.data.service = msg;
         }
@@ -175,14 +178,14 @@ const handleMessage = async (clinicConfig, fromNumber, incomingMsg) => {
         return;
     }
 
-    if(session.step === 7){
+    if (session.step === 7) {
         session.data.appointment_date = msg;
         await sendMessage(fromNumber, "⏰ Please provide preferred appointment time (HH:MM AM/PM):");
         session.step = 8;
         return;
     }
 
-    if(session.step === 8){
+    if (session.step === 8) {
         session.data.appointment_time = msg;
 
         const Appointment = getAppointmentModel(clinicConfig.clinic_name);
@@ -193,7 +196,7 @@ const handleMessage = async (clinicConfig, fromNumber, incomingMsg) => {
             appointment_time: session.data.appointment_time
         });
 
-        if(existing){
+        if (existing) {
             await sendMessage(fromNumber, `⚠️ Sorry! This slot is already booked. Please provide another time:`);
             return;
         }

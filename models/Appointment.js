@@ -1,14 +1,20 @@
 const mongoose = require('mongoose');
 
 const appointmentSchema = new mongoose.Schema({
-    clinic_id: { type: Number, required: true },
-    clinic_name: { type: String, required: true },
-    patient_name: { type: String, required: true },
-    service: { type: String, required: true },
-    phone: { type: String, required: true },
-    email: { type: String },
-    appointment_date: { type: String, required: true },
-    appointment_time: { type: String, required: true }
+    clinic_id: Number,
+    clinic_name: String,
+    patient_name: String,
+    phone: String,
+    email: String,
+    service: String,
+    appointment_date: String,
+    appointment_time: String
 }, { timestamps: true });
 
-module.exports = mongoose.model('Appointment', appointmentSchema);
+// Function to get a model per clinic dynamically
+function getAppointmentModel(clinicName) {
+    const collectionName = `appointments_${clinicName.replace(/\s+/g, '_').toLowerCase()}`;
+    return mongoose.models[collectionName] || mongoose.model(collectionName, appointmentSchema, collectionName);
+}
+
+module.exports = getAppointmentModel;
