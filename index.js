@@ -1,66 +1,71 @@
-require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const { handleMessage } = require('./chatLogic');
-const clinics = require('./clinics.json');
+require('dotenv').config();
 
 const app = express();
 app.use(bodyParser.json());
 
-// WhatsApp phone number ID from .env
-const phoneNumberIdEnv = process.env.WHATSAPP_PHONE_NUMBER_ID;
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Connect MongoDB
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('✅ MongoDB connected'))
-    .catch(err => console.log('❌ MongoDB connection error:', err));
-
-// Verify webhook
+// Webhook verification endpoint
 app.get('/webhook', (req, res) => {
-    const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
     if (mode && token) {
-        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-            console.log('✅ WEBHOOK VERIFIED');
+        if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
+            console.log('🔹 Webhook verified!');
             res.status(200).send(challenge);
         } else {
             res.sendStatus(403);
         }
+    } else {
+        res.sendStatus(400);
     }
 });
 
-// WhatsApp webhook endpoint
+// Webhook to receive messages
 app.post('/webhook', async (req, res) => {
-    try {
-        const entry = req.body.entry;
-        if (entry && entry.length > 0) {
-            const changes = entry[0].changes;
-            if (changes && changes.length > 0) {
-                const value = changes[0].value;
-                const messages = value.messages;
-                if (messages && messages.length > 0) {
-                    const from = messages[0].from;
-                    const text = messages[0].text.body;
-                    const phoneNumberIdIncoming = value.metadata.phone_number_id;
+    const body = req.body;
 
-                    // Match incoming phone_number_id with .env
-                    if (phoneNumberIdIncoming === phoneNumberIdEnv) {
-                        const clinicConfig = clinics[0]; // only one clinic in JSON
-                        await handleMessage(clinicConfig, from, text);
-                    } else {
-                        console.log(`⚠️ Unknown clinic for phone_number_id: ${phoneNumberIdIncoming}`);
-                    }
+    if (body.object === 'whatsapp_business_account') {
+        body.entry.forEach(async (entry) => {
+            entry.changes.forEach(async (change) => {
+                const value = change.value;
+                const messages = value.messages;
+
+                if (messages) {
+                    messages.forEach(async (message) => {
+                        const from = message.from; // WhatsApp user number
+                        const msgBody = message.text?.body || '';
+                        const phoneNumberId = value.metadata.phone_number_id;
+
+                        // Detect clinic by phone number ID
+                        // Add more clinics as needed
+                        const clinicConfig = {
+                            clinic_name: "Shai Dental Studio",
+                            clinic_id: 1,
+                            contact: "+91XXXXXXXXXX",
+                            phone_number_id: phoneNumberId
+                        };
+
+                        await handleMessage(clinicConfig, from, msgBody);
+                    });
                 }
-            }
-        }
+            });
+        });
+
         res.sendStatus(200);
-    } catch (err) {
-        console.error("❌ Webhook error:", err);
-        res.sendStatus(500);
+    } else {
+        res.sendStatus(404);
     }
 });
 
