@@ -7,12 +7,12 @@ require('dotenv').config();
 const app = express();
 app.use(bodyParser.json());
 
-// Connect to MongoDB
+// ----------- MongoDB connection -----------
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ MongoDB connected'))
     .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Map of clinics (phone_number_id => clinic info)
+// ----------- Clinics config (phone_number_id => clinic info) -----------
 const clinics = {
     [process.env.PHONE_NUMBER_ID]: {
         clinic_name: "Shai Dental Studio",
@@ -22,7 +22,7 @@ const clinics = {
     }
 };
 
-// Webhook verification
+// ----------- Webhook verification endpoint -----------
 app.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -40,7 +40,7 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// Webhook to receive messages
+// ----------- Webhook to receive messages -----------
 app.post('/webhook', async (req, res) => {
     const body = req.body;
 
@@ -51,16 +51,17 @@ app.post('/webhook', async (req, res) => {
                 const messages = value.messages;
 
                 if (messages) {
-                    messages.forEach(async (message) => {
-                        const from = message.from; // user number
+                    for (const message of messages) {
+                        const from = message.from; // WhatsApp user number
                         const msgBody = message.text?.body || '';
                         const phoneNumberId = value.metadata.phone_number_id;
 
                         const clinicConfig = clinics[phoneNumberId];
-                        if (!clinicConfig) return;
+                        if (!clinicConfig) return; // Ignore messages from unknown clinics
 
+                        // Pass message to chatLogic
                         await handleMessage(clinicConfig, from, msgBody);
-                    });
+                    }
                 }
             });
         });
@@ -71,6 +72,6 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-// Start server
+// ----------- Start server -----------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
