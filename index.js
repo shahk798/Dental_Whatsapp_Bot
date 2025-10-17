@@ -7,12 +7,12 @@ require('dotenv').config();
 const app = express();
 app.use(bodyParser.json());
 
-// ----------- MongoDB connection -----------
+// Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ MongoDB connected'))
     .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// ----------- Clinics config (phone_number_id => clinic info) -----------
+// Map of clinics (phone_number_id => clinic info)
 const clinics = {
     [process.env.PHONE_NUMBER_ID]: {
         clinic_name: "Shai Dental Studio",
@@ -22,7 +22,7 @@ const clinics = {
     }
 };
 
-// ----------- Webhook verification endpoint -----------
+// Webhook verification
 app.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -40,13 +40,13 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// ----------- Webhook to receive messages -----------
+// Webhook to receive messages
 app.post('/webhook', async (req, res) => {
     const body = req.body;
 
     if (body.object === 'whatsapp_business_account') {
-        body.entry.forEach(async (entry) => {
-            entry.changes.forEach(async (change) => {
+        for (const entry of body.entry) {
+            for (const change of entry.changes) {
                 const value = change.value;
                 const messages = value.messages;
 
@@ -57,21 +57,19 @@ app.post('/webhook', async (req, res) => {
                         const phoneNumberId = value.metadata.phone_number_id;
 
                         const clinicConfig = clinics[phoneNumberId];
-                        if (!clinicConfig) return; // Ignore messages from unknown clinics
+                        if (!clinicConfig) continue;
 
-                        // Pass message to chatLogic
                         await handleMessage(clinicConfig, from, msgBody);
                     }
                 }
-            });
-        });
-
+            }
+        }
         res.sendStatus(200);
     } else {
         res.sendStatus(404);
     }
 });
 
-// ----------- Start server -----------
+// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
