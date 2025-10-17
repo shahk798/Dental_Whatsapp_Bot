@@ -8,13 +8,21 @@ const app = express();
 app.use(bodyParser.json());
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('✅ MongoDB connected'))
+    .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Webhook verification endpoint
+// Map of clinics (phone_number_id => clinic info)
+const clinics = {
+    [process.env.PHONE_NUMBER_ID]: {
+        clinic_name: "Shai Dental Studio",
+        clinic_id: 1,
+        contact: "+911234567890",
+        phone_number_id: process.env.PHONE_NUMBER_ID
+    }
+};
+
+// Webhook verification
 app.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -44,22 +52,14 @@ app.post('/webhook', async (req, res) => {
 
                 if (messages) {
                     messages.forEach(async (message) => {
-                        const from = message.from; // WhatsApp user number
+                        const from = message.from; // user number
                         const msgBody = message.text?.body || '';
                         const phoneNumberId = value.metadata.phone_number_id;
 
-                        // Clinic config from environment variables
-                        const clinicConfig = {
-                            clinic_name: process.env.CLINIC_NAME,
-                            clinic_id: parseInt(process.env.CLINIC_ID),
-                            contact: process.env.CLINIC_CONTACT,
-                            phone_number_id: process.env.PHONE_NUMBER_ID
-                        };
+                        const clinicConfig = clinics[phoneNumberId];
+                        if (!clinicConfig) return;
 
-                        // Only handle messages for this clinic's phone number
-                        if (phoneNumberId === clinicConfig.phone_number_id) {
-                            await handleMessage(clinicConfig, from, msgBody);
-                        }
+                        await handleMessage(clinicConfig, from, msgBody);
                     });
                 }
             });
