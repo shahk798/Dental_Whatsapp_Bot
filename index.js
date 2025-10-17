@@ -7,29 +7,35 @@ require('dotenv').config();
 const app = express();
 app.use(bodyParser.json());
 
-// ✅ Connect to MongoDB
+// Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ MongoDB connected'))
     .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// ✅ Map of clinics (phone_number_id => clinic info)
-const clinics = {
-    [process.env.PHONE_NUMBER_ID]: {
-        clinic_name: "Shai Dental Studio",
-        clinic_id: 1,
-        contact: "+911234567890",
-        phone_number_id: process.env.PHONE_NUMBER_ID
-    },
-    // 👉 You can add more clinics like this:
-    // [process.env.PHONE_NUMBER_ID_2]: {
-    //     clinic_name: "Smile Care Dental",
-    //     clinic_id: 2,
-    //     contact: "+911112223334",
-    //     phone_number_id: process.env.PHONE_NUMBER_ID_2
-    // }
-};
+// Load clinics from environment variables
+// Example ENV format: 
+// CLINIC_1_PHONE_NUMBER_ID=123456
+// CLINIC_1_NAME="Shai Dental Studio"
+// CLINIC_1_ID=1
+// CLINIC_1_CONTACT="+911234567890"
+// CLINIC_2_PHONE_NUMBER_ID=654321
+// CLINIC_2_NAME="Smile Care"
+// ...
+const clinics = {};
+Object.keys(process.env).forEach(key => {
+    const match = key.match(/^CLINIC_(\d+)_PHONE_NUMBER_ID$/);
+    if (match) {
+        const idx = match[1];
+        clinics[process.env[key]] = {
+            clinic_name: process.env[`CLINIC_${idx}_NAME`],
+            clinic_id: parseInt(process.env[`CLINIC_${idx}_ID`], 10),
+            contact: process.env[`CLINIC_${idx}_CONTACT`],
+            phone_number_id: process.env[key]
+        };
+    }
+});
 
-// ✅ Webhook verification
+// Webhook verification
 app.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -47,18 +53,18 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// ✅ Webhook to receive messages
+// Webhook to receive messages
 app.post('/webhook', async (req, res) => {
     const body = req.body;
 
     if (body.object === 'whatsapp_business_account') {
-        for (const entry of body.entry) {
-            for (const change of entry.changes) {
+        body.entry.forEach(async (entry) => {
+            entry.changes.forEach(async (change) => {
                 const value = change.value;
                 const messages = value.messages;
 
                 if (messages) {
-                    for (const message of messages) {
+                    messages.forEach(async (message) => {
                         const from = message.from; // user number
                         const msgBody = message.text?.body || '';
                         const phoneNumberId = value.metadata.phone_number_id;
@@ -67,16 +73,17 @@ app.post('/webhook', async (req, res) => {
                         if (!clinicConfig) return;
 
                         await handleMessage(clinicConfig, from, msgBody);
-                    }
+                    });
                 }
-            }
-        }
+            });
+        });
+
         res.sendStatus(200);
     } else {
         res.sendStatus(404);
     }
 });
 
-// ✅ Start server
+// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
