@@ -48,16 +48,18 @@ app.post('/webhook', async (req, res) => {
                         const msgBody = message.text?.body || '';
                         const phoneNumberId = value.metadata.phone_number_id;
 
-                        // Detect clinic by phone number ID
-                        // Add more clinics as needed
+                        // Clinic config from environment variables
                         const clinicConfig = {
-                            clinic_name: "Shai Dental Studio",
-                            clinic_id: 1,
-                            contact: "+91XXXXXXXXXX",
-                            phone_number_id: phoneNumberId
+                            clinic_name: process.env.CLINIC_NAME,
+                            clinic_id: parseInt(process.env.CLINIC_ID),
+                            contact: process.env.CLINIC_CONTACT,
+                            phone_number_id: process.env.PHONE_NUMBER_ID
                         };
 
-                        await handleMessage(clinicConfig, from, msgBody);
+                        // Only handle messages for this clinic's phone number
+                        if (phoneNumberId === clinicConfig.phone_number_id) {
+                            await handleMessage(clinicConfig, from, msgBody);
+                        }
                     });
                 }
             });

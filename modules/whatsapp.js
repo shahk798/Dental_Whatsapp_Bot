@@ -1,23 +1,23 @@
+// Example WhatsApp sendMessage module
 const axios = require('axios');
-require('dotenv').config();
 
-const sendMessage = async (to, text) => {
+const sendMessage = async (to, message) => {
+    const token = process.env.WHATSAPP_TOKEN; // your WhatsApp API token
+    const phoneNumberId = process.env.PHONE_NUMBER_ID;
+
     try {
-        const token = process.env.WHATSAPP_API_KEY;
-        const phone_number_id = process.env.WHATSAPP_PHONE_NUMBER_ID;
-
-        await axios.post(`https://graph.facebook.com/v17.0/${phone_number_id}/messages`, {
-            messaging_product: "whatsapp",
-            to,
-            text: { body: text }
-        }, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+        await axios({
+            method: 'POST',
+            url: `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`,
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            data: {
+                messaging_product: 'whatsapp',
+                to,
+                text: { body: message }
             }
         });
-    } catch (err) {
-        console.error("❌ WhatsApp send message error:", err.response?.data || err.message);
+    } catch (error) {
+        console.error('Error sending message:', error.response?.data || error.message);
     }
 };
 
