@@ -1,29 +1,23 @@
-const Sentry = require('@sentry/node');
-const { Handlers } = require('@sentry/node'); // <-- Added
-Sentry.init({
-    dsn: process.env.SENTRY_DSN, // your DSN from Sentry
-    tracesSampleRate: 1.0 // adjust for performance monitoring
-});
+// Initialize Sentry first
+const Sentry = require("./instrument");
 
-const express = require('express');
-const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
-const { handleMessage } = require('./chatLogic');
-require('dotenv').config();
+const express = require("express");
+const bodyParser = require("body-parser");
+const mongoose = require("mongoose");
+const { handleMessage } = require("./chatLogic");
+require("dotenv").config();
 
 const app = express();
 
-// Request Handler must be the first middleware
-app.use(Handlers.requestHandler()); // <-- Fixed
-app.use(Handlers.tracingHandler()); // <-- Optional, for performance monitoring
-app.use(bodyParser.json());
+// Middleware
+app.use(bodyParser.json()); // Body parser comes after Sentry init
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('✅ MongoDB connected'))
-    .catch(err => console.error('❌ MongoDB connection error:', err));
+    .then(() => console.log("✅ MongoDB connected"))
+    .catch(err => console.error("❌ MongoDB connection error:", err));
 
-// Clinics map (phone_number_id => clinic info)
+// Clinics map
 const clinics = {
     [process.env.PHONE_NUMBER_ID]: {
         clinic_name: "Shai Dental Studio",
@@ -34,14 +28,14 @@ const clinics = {
 };
 
 // Webhook verification
-app.get('/webhook', (req, res) => {
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
+app.get("/webhook", (req, res) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
 
     if (mode && token) {
-        if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
-            console.log('🔹 Webhook verified!');
+        if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
+            console.log("🔹 Webhook verified!");
             res.status(200).send(challenge);
         } else {
             res.sendStatus(403);
@@ -52,10 +46,10 @@ app.get('/webhook', (req, res) => {
 });
 
 // Webhook to receive messages
-app.post('/webhook', async (req, res) => {
+app.post("/webhook", async (req, res) => {
     const body = req.body;
 
-    if (body.object === 'whatsapp_business_account') {
+    if (body.object === "whatsapp_business_account") {
         for (const entry of body.entry) {
             for (const change of entry.changes) {
                 const value = change.value;
@@ -64,19 +58,21 @@ app.post('/webhook', async (req, res) => {
                 if (messages) {
                     for (const message of messages) {
                         const from = message.from;
-                        const msgBody = message.text?.body || '';
+                        const msgBody = message.text?.body || "";
                         const phoneNumberId = value.metadata.phone_number_id;
 
                         const clinicConfig = clinics[phoneNumberId];
                         if (!clinicConfig) {
-                            console.log('❌ No clinic config found for phone_number_id:', phoneNumberId);
+                            console.log("❌ No clinic config found for phone_number_id:", phoneNumberId);
                             continue;
                         }
 
                         console.log(`📩 Message from ${from}: "${msgBody}"`);
+
                         try {
                             await handleMessage(clinicConfig, from, msgBody);
                         } catch (error) {
+                            // Send only your clinic's errors to Sentry
                             Sentry.withScope(scope => {
                                 scope.setExtra("clinic_name", clinicConfig.clinic_name);
                                 scope.setExtra("clinic_contact", clinicConfig.contact);
@@ -84,7 +80,7 @@ app.post('/webhook', async (req, res) => {
                                 scope.setExtra("message_body", msgBody);
                                 Sentry.captureException(error);
                             });
-                            console.error('❌ Error handling message:', error);
+                            console.error("❌ Error handling message:", error);
                         }
                     }
                 }
@@ -94,6 +90,14 @@ app.post('/webhook', async (req, res) => {
     } else {
         res.sendStatus(404);
     }
+});
+
+// Sentry error handler (after all routes)
+app.use(Sentry.Handlers.errorHandler());
+
+// Optional fallback error handler
+app.use((err, req, res, next) => {
+    res.status(500).send(res.sentry + "\n");
 });
 
 // Start server
