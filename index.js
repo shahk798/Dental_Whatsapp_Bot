@@ -9,20 +9,6 @@ require("dotenv").config();
 
 const app = express();
 
-// Attach Express app instance to Sentry's Express integration for full tracing support
-Sentry.getCurrentHub()
-  .getClient()
-  .getIntegrations()
-  .forEach((integration) => {
-    if (integration.name === "Express") {
-      integration._app = app;
-    }
-  });
-
-// Optional: Explicitly add Sentry request & tracing handlers
-app.use(Sentry.Handlers.requestHandler());
-app.use(Sentry.Handlers.tracingHandler());
-
 // Your middlewares
 app.use(bodyParser.json());
 
