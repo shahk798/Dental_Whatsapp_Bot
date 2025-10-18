@@ -101,6 +101,16 @@ app.use((err, req, res, next) => {
   res.status(500).send("Internal Server Error");
 });
 
+
+// Health check endpoint for UptimeRobot
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: "ok",
+        message: "Bot is running! ✅",
+        activePatientSessions: Object.keys(patientSessions).length
+    });
+});
+
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
