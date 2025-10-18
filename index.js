@@ -102,14 +102,14 @@ app.use((err, req, res, next) => {
 });
 
 
-// Health check endpoint for UptimeRobot
+// Health check endpoint for uptime monitoring
 app.get('/health', (req, res) => {
     res.status(200).json({
         status: "ok",
-        message: "Bot is running! ✅",
-        activePatientSessions: Object.keys(patientSessions).length
+        message: "Bot is running! ✅"
     });
 });
+
 
 // Start server
 const PORT = process.env.PORT || 5000;
