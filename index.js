@@ -12,7 +12,7 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ MongoDB connected'))
     .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Map of clinics (phone_number_id => clinic info)
+// Clinics map (phone_number_id => clinic info)
 const clinics = {
     [process.env.PHONE_NUMBER_ID]: {
         clinic_name: "Shai Dental Studio",
@@ -52,13 +52,17 @@ app.post('/webhook', async (req, res) => {
 
                 if (messages) {
                     for (const message of messages) {
-                        const from = message.from; // WhatsApp user number
+                        const from = message.from;
                         const msgBody = message.text?.body || '';
                         const phoneNumberId = value.metadata.phone_number_id;
 
                         const clinicConfig = clinics[phoneNumberId];
-                        if (!clinicConfig) continue;
+                        if (!clinicConfig) {
+                            console.log('❌ No clinic config found for phone_number_id:', phoneNumberId);
+                            continue;
+                        }
 
+                        console.log(`📩 Message from ${from}: "${msgBody}"`);
                         await handleMessage(clinicConfig, from, msgBody);
                     }
                 }
