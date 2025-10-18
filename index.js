@@ -1,4 +1,4 @@
-// Initialize Sentry first
+// Initialize Sentry early via instrument.js (which exports initialized Sentry)
 const Sentry = require("./instrument");
 
 const express = require("express");
@@ -9,95 +9,110 @@ require("dotenv").config();
 
 const app = express();
 
-// Middleware
-app.use(bodyParser.json()); // Body parser comes after Sentry init
+// Attach Express app instance to Sentry's Express integration for full tracing support
+Sentry.getCurrentHub()
+  .getClient()
+  .getIntegrations()
+  .forEach((integration) => {
+    if (integration.name === "Express") {
+      integration._app = app;
+    }
+  });
+
+// Optional: Explicitly add Sentry request & tracing handlers
+app.use(Sentry.Handlers.requestHandler());
+app.use(Sentry.Handlers.tracingHandler());
+
+// Your middlewares
+app.use(bodyParser.json());
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ MongoDB connected"))
-    .catch(err => console.error("❌ MongoDB connection error:", err));
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
 // Clinics map
 const clinics = {
-    [process.env.PHONE_NUMBER_ID]: {
-        clinic_name: "Shai Dental Studio",
-        clinic_id: 1,
-        contact: "+911234567890",
-        phone_number_id: process.env.PHONE_NUMBER_ID
-    }
+  [process.env.PHONE_NUMBER_ID]: {
+    clinic_name: "Shai Dental Studio",
+    clinic_id: 1,
+    contact: "+911234567890",
+    phone_number_id: process.env.PHONE_NUMBER_ID,
+  },
 };
 
 // Webhook verification
 app.get("/webhook", (req, res) => {
-    const mode = req.query["hub.mode"];
-    const token = req.query["hub.verify_token"];
-    const challenge = req.query["hub.challenge"];
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
 
-    if (mode && token) {
-        if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
-            console.log("🔹 Webhook verified!");
-            res.status(200).send(challenge);
-        } else {
-            res.sendStatus(403);
-        }
+  if (mode && token) {
+    if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
+      console.log("🔹 Webhook verified!");
+      res.status(200).send(challenge);
     } else {
-        res.sendStatus(400);
+      res.sendStatus(403);
     }
+  } else {
+    res.sendStatus(400);
+  }
 });
 
 // Webhook to receive messages
 app.post("/webhook", async (req, res) => {
-    const body = req.body;
+  const body = req.body;
 
-    if (body.object === "whatsapp_business_account") {
-        for (const entry of body.entry) {
-            for (const change of entry.changes) {
-                const value = change.value;
-                const messages = value.messages;
+  if (body.object === "whatsapp_business_account") {
+    for (const entry of body.entry) {
+      for (const change of entry.changes) {
+        const value = change.value;
+        const messages = value.messages;
 
-                if (messages) {
-                    for (const message of messages) {
-                        const from = message.from;
-                        const msgBody = message.text?.body || "";
-                        const phoneNumberId = value.metadata.phone_number_id;
+        if (messages) {
+          for (const message of messages) {
+            const from = message.from;
+            const msgBody = message.text?.body || "";
+            const phoneNumberId = value.metadata.phone_number_id;
 
-                        const clinicConfig = clinics[phoneNumberId];
-                        if (!clinicConfig) {
-                            console.log("❌ No clinic config found for phone_number_id:", phoneNumberId);
-                            continue;
-                        }
-
-                        console.log(`📩 Message from ${from}: "${msgBody}"`);
-
-                        try {
-                            await handleMessage(clinicConfig, from, msgBody);
-                        } catch (error) {
-                            // Send only your clinic's errors to Sentry
-                            Sentry.withScope(scope => {
-                                scope.setExtra("clinic_name", clinicConfig.clinic_name);
-                                scope.setExtra("clinic_contact", clinicConfig.contact);
-                                scope.setExtra("from_number", from);
-                                scope.setExtra("message_body", msgBody);
-                                Sentry.captureException(error);
-                            });
-                            console.error("❌ Error handling message:", error);
-                        }
-                    }
-                }
+            const clinicConfig = clinics[phoneNumberId];
+            if (!clinicConfig) {
+              console.log("❌ No clinic config found for phone_number_id:", phoneNumberId);
+              continue;
             }
+
+            console.log(`📩 Message from ${from}: "${msgBody}"`);
+
+            try {
+              await handleMessage(clinicConfig, from, msgBody);
+            } catch (error) {
+              Sentry.withScope((scope) => {
+                scope.setExtra("clinic_name", clinicConfig.clinic_name);
+                scope.setExtra("clinic_contact", clinicConfig.contact);
+                scope.setExtra("from_number", from);
+                scope.setExtra("message_body", msgBody);
+                Sentry.captureException(error);
+              });
+              console.error("❌ Error handling message:", error);
+            }
+          }
         }
-        res.sendStatus(200);
-    } else {
-        res.sendStatus(404);
+      }
     }
+    res.sendStatus(200);
+  } else {
+    res.sendStatus(404);
+  }
 });
 
-// Sentry error handler (after all routes)
-app.use(Sentry.Handlers.errorHandler());
+// Use Sentry error handling middleware (v8+)
+Sentry.setupExpressErrorHandler(app);
 
 // Optional fallback error handler
 app.use((err, req, res, next) => {
-    res.status(500).send(res.sentry + "\n");
+  console.error("Unhandled error:", err);
+  res.status(500).send("Internal Server Error");
 });
 
 // Start server
