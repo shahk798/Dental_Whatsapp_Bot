@@ -1,3 +1,11 @@
+const Sentry = require('@sentry/node');
+
+Sentry.init({
+    dsn: process.env.SENTRY_DSN, // your DSN from Sentry
+    tracesSampleRate: 1.0 // adjust for performance monitoring
+});
+
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
@@ -5,7 +13,11 @@ const { handleMessage } = require('./chatLogic');
 require('dotenv').config();
 
 const app = express();
+
+// Request Handler must be the first middleware
+app.use(Sentry.Handlers.requestHandler());
 app.use(bodyParser.json());
+
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -63,7 +75,19 @@ app.post('/webhook', async (req, res) => {
                         }
 
                         console.log(`📩 Message from ${from}: "${msgBody}"`);
-                        await handleMessage(clinicConfig, from, msgBody);
+                        try {
+    await handleMessage(clinicConfig, from, msgBody);
+                          } catch (error) {
+                        Sentry.withScope(scope => {
+                        scope.setExtra("clinic_name", clinicConfig.clinic_name);
+                        scope.setExtra("clinic_contact", clinicConfig.contact);
+                        scope.setExtra("from_number", from);
+                        scope.setExtra("message_body", msgBody);
+                        Sentry.captureException(error);
+                       });
+                        console.error('❌ Error handling message:', error);
+                     }
+
                     }
                 }
             }
