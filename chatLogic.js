@@ -1,8 +1,14 @@
+require('dotenv').config();
 const { sendMessage } = require('./modules/whatsapp');
 const mongoose = require('mongoose');
 
 // Patient sessions
 const patientSessions = {};
+
+// Clinic info from env
+const CLINIC_ID = process.env.CLINIC_ID;
+const CLINIC_NAME = process.env.CLINIC_NAME || "Your Clinic";
+const CLINIC_CONTACT = process.env.CLINIC_CONTACT || "0000000000";
 
 // Services and FAQs
 const servicesList = [
@@ -26,8 +32,8 @@ const faqsList = [
 ];
 
 // Dynamic appointment model
-const getAppointmentModel = (clinicName) => {
-    const collectionName = `appointments_${clinicName.replace(/\s+/g, '_').toLowerCase()}`;
+const getAppointmentModel = () => {
+    const collectionName = `appointments_${CLINIC_NAME.replace(/\s+/g, '_').toLowerCase()}`;
     if (mongoose.models[collectionName]) return mongoose.models[collectionName];
 
     const schema = new mongoose.Schema({
@@ -45,7 +51,7 @@ const getAppointmentModel = (clinicName) => {
 };
 
 // Main handler
-const handleMessage = async (clinicConfig, fromNumber, msg) => {
+const handleMessage = async (fromNumber, msg) => {
     if (!patientSessions[fromNumber]) {
         patientSessions[fromNumber] = { step: 0, data: {}, faqMode: false };
     }
@@ -53,7 +59,7 @@ const handleMessage = async (clinicConfig, fromNumber, msg) => {
     const session = patientSessions[fromNumber];
 
     const sendMainMenu = async (name) => {
-        const menu = `👋 Hey ${name}! Welcome to *${clinicConfig.clinic_name}*.\nI am here to assist you. 😊\n\n📋 *Main Menu*:\n1️⃣ Services & Prices\n2️⃣ Book Appointment\n3️⃣ Working Hours ⏰\n4️⃣ Clinic Address 📍\n5️⃣ FAQs ❓\n\nPlease reply with the option number or name.`;
+        const menu = `👋 Hey ${name}! Welcome to *${CLINIC_NAME}*.\nI am here to assist you. 😊\n\n📋 *Main Menu*:\n1️⃣ Services & Prices\n2️⃣ Book Appointment\n3️⃣ Working Hours ⏰\n4️⃣ Clinic Address 📍\n5️⃣ FAQs ❓\n\nPlease reply with the option number or name.`;
         await sendMessage(fromNumber, menu);
     };
 
@@ -67,12 +73,10 @@ const handleMessage = async (clinicConfig, fromNumber, msg) => {
             await sendMessage(fromNumber, "Please reply with FAQ number or question. Reply 'no' to exit FAQ.");
             return;
         } else {
-            
-           if (input === 'no') {
-              session.faqMode = false;
-            await sendMessage(fromNumber, `🙏 Thanks for visiting *${clinicConfig.clinic_name}*! 😊`);
-             return;
-     
+            if (input === 'no') {
+                session.faqMode = false;
+                await sendMessage(fromNumber, `🙏 Thanks for visiting *${CLINIC_NAME}*! 😊`);
+                return;
             }
             const index = parseInt(input)-1;
             if(index >=0 && index < faqsList.length){
@@ -80,7 +84,7 @@ const handleMessage = async (clinicConfig, fromNumber, msg) => {
             } else {
                 const matched = faqsList.find(f=> input.includes(f.question.toLowerCase()));
                 if(matched) await sendMessage(fromNumber, `💡 ${matched.answer}`);
-                else await sendMessage(fromNumber, `❌ Sorry, I didn’t understand. Contact staff at 📞 ${clinicConfig.contact}.`);
+                else await sendMessage(fromNumber, `❌ Sorry, I didn’t understand. Contact staff at 📞 ${CLINIC_CONTACT}.`);
             }
             await sendMessage(fromNumber, "Do you want to ask another FAQ? (yes/no)");
             return;
@@ -90,7 +94,7 @@ const handleMessage = async (clinicConfig, fromNumber, msg) => {
     // Booking steps
     switch(session.step){
         case 0:
-            await sendMessage(fromNumber, `👋 Hey! Welcome to *${clinicConfig.clinic_name}*, I’m here to assist you. What’s your name? 😊`);
+            await sendMessage(fromNumber, `👋 Hey! Welcome to *${CLINIC_NAME}*, I’m here to assist you. What’s your name? 😊`);
             session.step = 1;
             return;
         case 1:
@@ -109,20 +113,19 @@ const handleMessage = async (clinicConfig, fromNumber, msg) => {
             } else if(input.includes('4') || input.includes('address')){
                 await sendMessage(fromNumber, "📍 *Clinic Address*\n123 Smile Street, Dental City, India");
             } else {
-                await sendMessage(fromNumber, `❌ Sorry, I didn’t understand. Contact staff at 📞 ${clinicConfig.contact}.`);
+                await sendMessage(fromNumber, `❌ Sorry, I didn’t understand. Contact staff at 📞 ${CLINIC_CONTACT}.`);
             }
             return;
     }
 
-    // Continue booking steps if session.step >= 3
     if(session.step >= 3){
-        await handleBookingSteps(clinicConfig, session, fromNumber, msg);
+        await handleBookingSteps(session, fromNumber, msg);
     }
 };
 
-const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
+const handleBookingSteps = async (session, fromNumber, msg) => {
     const input = msg.trim();
-    const Appointment = getAppointmentModel(clinicConfig.clinic_name);
+    const Appointment = getAppointmentModel();
 
     switch(session.step){
         case 3:
@@ -159,7 +162,7 @@ const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
         case 8:
             session.data.appointment_time = input;
             const existing = await Appointment.findOne({
-                clinic_id: clinicConfig.clinic_id,
+                clinic_id: CLINIC_ID,
                 appointment_date: session.data.appointment_date,
                 appointment_time: session.data.appointment_time
             });
@@ -168,8 +171,8 @@ const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
                 return;
             }
             const appointment = new Appointment({
-                clinic_id: clinicConfig.clinic_id,
-                clinic_name: clinicConfig.clinic_name,
+                clinic_id: CLINIC_ID,
+                clinic_name: CLINIC_NAME,
                 patient_name: session.data.patient_name,
                 service: session.data.service,
                 phone: session.data.phone,
@@ -179,9 +182,9 @@ const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
             });
             await appointment.save();
 
-            await sendMessage(fromNumber, `✅ Appointment Confirmed!\n\n🏥 Clinic: ${clinicConfig.clinic_name}\n👤 Name: ${session.data.patient_name}\n📞 Phone: ${session.data.phone}\n✉️ Email: ${session.data.email || "N/A"}\n🦷 Service: ${session.data.service}\n📅 Date: ${session.data.appointment_date}\n⏰ Time: ${session.data.appointment_time}\n\nThank you for booking with *${clinicConfig.clinic_name}*! 🎉`);
+            await sendMessage(fromNumber, `✅ Appointment Confirmed!\n\n🏥 Clinic: ${CLINIC_NAME}\n👤 Name: ${session.data.patient_name}\n📞 Phone: ${session.data.phone}\n✉️ Email: ${session.data.email || "N/A"}\n🦷 Service: ${session.data.service}\n📅 Date: ${session.data.appointment_date}\n⏰ Time: ${session.data.appointment_time}\n\nThank you for booking with *${CLINIC_NAME}*! 🎉`);
 
-            session.step = 2; // Allow patient to continue asking info
+            session.step = 2; // back to main menu
             break;
     }
 };
