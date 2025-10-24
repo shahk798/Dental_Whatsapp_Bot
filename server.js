@@ -8,8 +8,6 @@ const { handleMessage } = require("./chatLogic");
 require("dotenv").config();
 
 const app = express();
-
-// Your middlewares
 app.use(bodyParser.json());
 
 // Connect to MongoDB
@@ -18,15 +16,21 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// Clinics map
-const clinics = {
-  [process.env.PHONE_NUMBER_ID]: {
-    clinic_name: "Shai Dental Studio",
-    clinic_id: process.env.clinic_id,
-    contact: "+911234567890",
-    phone_number_id: process.env.PHONE_NUMBER_ID,
-  },
-};
+// Parse clinics from environment variables
+const clinicIds = process.env.CLINIC_IDS.split(",");
+const clinicNames = process.env.CLINIC_NAMES.split(",");
+const clinicContacts = process.env.CLINIC_CONTACTS.split(",");
+const phoneNumbers = process.env.PHONE_NUMBERS.split(",");
+
+const clinics = {};
+phoneNumbers.forEach((phoneNumberId, index) => {
+  clinics[phoneNumberId] = {
+    clinic_name: clinicNames[index],
+    clinic_id: clinicIds[index],
+    contact: clinicContacts[index],
+    phone_number_id: phoneNumberId,
+  };
+});
 
 // Webhook verification
 app.get("/webhook", (req, res) => {
@@ -101,15 +105,13 @@ app.use((err, req, res, next) => {
   res.status(500).send("Internal Server Error");
 });
 
-
-// Health check endpoint for uptime monitoring
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        status: "ok",
-        message: "Bot is running! ✅"
-    });
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    message: "Bot is running! ✅",
+  });
 });
-
 
 // Start server
 const PORT = process.env.PORT || 5000;
