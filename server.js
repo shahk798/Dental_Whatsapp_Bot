@@ -1,4 +1,4 @@
-// Initialize Sentry early via instrument.js (which exports initialized Sentry)
+// Initialize Sentry early via instrument.js (exports initialized Sentry)
 const Sentry = require("./instrument");
 
 const express = require("express");
@@ -12,9 +12,15 @@ app.use(bodyParser.json());
 
 // Connect to MongoDB
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err));
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err);
+    process.exit(1); // stop server if DB connection fails
+  });
 
 // Parse clinics from environment variables
 const clinicIds = process.env.CLINIC_IDS.split(",");
@@ -38,16 +44,11 @@ app.get("/webhook", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode && token) {
-    if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
-      console.log("🔹 Webhook verified!");
-      res.status(200).send(challenge);
-    } else {
-      res.sendStatus(403);
-    }
-  } else {
-    res.sendStatus(400);
+  if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
+    console.log("🔹 Webhook verified!");
+    return res.status(200).send(challenge);
   }
+  res.sendStatus(403);
 });
 
 // Webhook to receive messages
@@ -90,10 +91,9 @@ app.post("/webhook", async (req, res) => {
         }
       }
     }
-    res.sendStatus(200);
-  } else {
-    res.sendStatus(404);
+    return res.sendStatus(200);
   }
+  res.sendStatus(404);
 });
 
 // Use Sentry error handling middleware (v8+)
@@ -105,7 +105,7 @@ app.use((err, req, res, next) => {
   res.status(500).send("Internal Server Error");
 });
 
-// Health check endpoint
+// Health check endpoint for Render
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
