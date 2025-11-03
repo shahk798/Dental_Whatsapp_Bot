@@ -36,6 +36,8 @@ const Appointment = mongoose.models['appointments'] || mongoose.model(
         service: String,
         phone: String,
         email: String,
+        price: String,
+        status:string,
         appointment_date: String,
         appointment_time: String
     }, { timestamps: true })

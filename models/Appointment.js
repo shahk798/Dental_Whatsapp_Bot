@@ -7,6 +7,8 @@ const appointmentSchema = new mongoose.Schema({
     phone: String,
     email: String,
     service: String,
+    price : Number,
+    status : string ,
     appointment_date: String,
     appointment_time: String
 }, { timestamps: true });
