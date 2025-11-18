@@ -26,22 +26,8 @@ const faqsList = [
     { question: "Where is the clinic located?", answer: "📍 123 Smile Street, Dental City, India" }
 ];
 
-// Single shared appointments collection
-const Appointment = mongoose.models['appointments'] || mongoose.model(
-    'appointments',
-    new mongoose.Schema({
-        clinic_id: String,       // To separate clinics in the same collection
-        clinic_name: String,
-        patient_name: String,
-        service: String,
-        phone: String,
-        email: String,
-        price: String,
-        status: String,
-        appointment_date: String,
-        appointment_time: String
-    }, { timestamps: true })
-);
+// Import dynamic appointment model
+const getAppointmentModel = require('./models/Appointment');
 
 // Main handler
 const handleMessage = async (clinicConfig, fromNumber, msg) => {
@@ -155,6 +141,7 @@ const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
         case 8:
             session.data.appointment_time = input;
 
+            const Appointment = getAppointmentModel(clinicConfig.clinic_name);
             const existing = await Appointment.findOne({
                 clinic_id: clinicConfig.clinic_id,
                 appointment_date: session.data.appointment_date,
