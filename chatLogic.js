@@ -137,7 +137,13 @@ const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
             break;
         case 6:
             const choice = parseInt(input);
-            session.data.service = (choice>=1 && choice<=servicesList.length)? servicesList[choice-1].name : input;
+            if (choice >= 1 && choice <= servicesList.length) {
+                session.data.service = servicesList[choice-1].name;
+                session.data.price = servicesList[choice-1].price;
+            } else {
+                session.data.service = input;
+                session.data.price = "₹0"; // Default price if not selected from list
+            }
             await sendMessage(fromNumber, "📅 Please provide preferred appointment date (YYYY-MM-DD):");
             session.step = 7;
             break;
@@ -167,6 +173,8 @@ const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
                 service: session.data.service,
                 phone: session.data.phone,
                 email: session.data.email || "",
+                price: session.data.price || "₹0",
+                status: "pending",
                 appointment_date: session.data.appointment_date,
                 appointment_time: session.data.appointment_time
             });
