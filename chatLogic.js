@@ -2,6 +2,21 @@ require('dotenv').config();
 const { sendMessage } = require('./modules/whatsapp');
 const mongoose = require('mongoose');
 
+// small helper: normalize price strings like "₹1,200" or "1200" => number 1200
+function parsePriceStringToNumber(priceStr) {
+  if (priceStr === null || priceStr === undefined) return 0;
+  if (typeof priceStr === 'number' && !isNaN(priceStr)) return priceStr;
+
+  // remove everything except digits, dot and minus
+  const cleaned = String(priceStr).replace(/[^\d.-]/g, '');
+
+  // guard for empty or invalid values
+  if (cleaned === '' || cleaned === '.' || cleaned === '-') return 0;
+
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
 // Patient sessions (per phone number)
 const patientSessions = {};
 
@@ -125,7 +140,8 @@ const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
             const choice = parseInt(input);
             if (choice >= 1 && choice <= servicesList.length) {
                 session.data.service = servicesList[choice-1].name;
-                session.data.price = parseInt(servicesList[choice-1].price.replace('₹', ''));
+                // parse price into a number using helper
+                session.data.price = parsePriceStringToNumber(servicesList[choice-1].price);
             } else {
                 session.data.service = input;
                 session.data.price = 0; // Default price if not selected from list
@@ -160,7 +176,7 @@ const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
                 service: session.data.service,
                 phone: session.data.phone,
                 email: session.data.email || "",
-                price: session.data.price || "₹0",
+                price: Number(session.data.price) || 0,
                 status: "pending",
                 appointment_date: session.data.appointment_date,
                 appointment_time: session.data.appointment_time
