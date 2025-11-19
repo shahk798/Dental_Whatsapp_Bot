@@ -125,10 +125,10 @@ const handleBookingSteps = async (clinicConfig, session, fromNumber, msg) => {
             const choice = parseInt(input);
             if (choice >= 1 && choice <= servicesList.length) {
                 session.data.service = servicesList[choice-1].name;
-                session.data.price = servicesList[choice-1].price;
+                session.data.price = parseInt(servicesList[choice-1].price.replace('₹', ''));
             } else {
                 session.data.service = input;
-                session.data.price = "₹0"; // Default price if not selected from list
+                session.data.price = 0; // Default price if not selected from list
             }
             await sendMessage(fromNumber, "📅 Please provide preferred appointment date (YYYY-MM-DD):");
             session.step = 7;
